@@ -3,7 +3,7 @@
 module Lib where
 
 import Control.Monad.IO.Class 
-import Data.List (reverse, transpose)
+import Data.List (reverse, transpose, partition)
 import Data.Maybe (isJust)
 import Data.Vector (Vector)
 import Data.Word (Word8)
@@ -23,6 +23,8 @@ data Colour = Red | Green | Blue | Yellow | Pink | Purple | Orange | White deriv
 
 newtype BrickShape = BrickShape {_unBrickShape :: [[Bool]]}  deriving Show
 
+newtype Score = Score { _unScore :: Int } deriving Show
+
 data Brick = Brick { 
     _shape :: BrickShape, 
     _colour :: Colour 
@@ -39,13 +41,15 @@ data State = State {
     _nextShapes :: [BrickShape],
     _nextColours :: [Colour],
     _currentGrid :: [[Maybe Colour]],
-    _lastTick :: Word32
+    _lastTick :: Word32,
+    _score :: Score
 } deriving Show
 
 $(makeLenses ''BrickShape)
 $(makeLenses ''Brick)
 $(makeLenses ''ActiveBrick)
 $(makeLenses ''State)
+$(makeLenses ''Score)
 
 data Update = 
     Tick Word32 |
@@ -127,7 +131,9 @@ newShape :: State -> State
 newShape st = let
     cg = view currentGrid st
     a  = view active st
+    oldScore = view (score . unScore) st
     newGrid = mergeBrickIntoGrid cg a
+    (withRowsRemoved, scoreUpdate) = removeCompleteRows newGrid
     in State {
         _active = ActiveBrick {
             _brick = Brick {
@@ -139,9 +145,18 @@ newShape st = let
         },
         _nextShapes = tail (view nextShapes st),
         _nextColours = tail (view nextColours st),
-        _currentGrid = newGrid,
-        _lastTick = (view lastTick st)
+        _currentGrid = withRowsRemoved,
+        _lastTick = (view lastTick st),
+        _score = Score $ oldScore + scoreUpdate
      }
+
+removeCompleteRows :: [[Maybe a]] -> ([[Maybe a]], Int)
+removeCompleteRows grid = let
+    (completed, notCompleted) = partition (all isJust) grid
+    allNothings = replicate boardWidth Nothing
+    completedLen = length completed
+    scoreUpdate = completedLen * completedLen * 10
+    in (replicate completedLen allNothings ++ notCompleted, scoreUpdate)
 
 mergeBrickIntoGrid :: [[Maybe Colour]] -> ActiveBrick -> [[Maybe Colour]]
 mergeBrickIntoGrid original ab = let
@@ -198,8 +213,10 @@ squareSide :: Int
 squareSide = 25
 
 topMargin = 10 :: Int32
-
 leftMargin = 10 :: Int32
+
+scoreTop = 10   :: Int32
+scoreLeft = 300 :: Int32
 
 
 
@@ -269,7 +286,8 @@ initialState tick = State {
    _nextShapes = shapeSeq,
    _nextColours = colourSeq,
    _currentGrid = emptyGrid,
-   _lastTick = tick
+   _lastTick = tick,
+   _score = Score 0
 }
 
 renderColour :: Colour -> V4 Word8
@@ -289,12 +307,15 @@ renderState s r = do
     drawOutline
     drawActive (view active s)
     drawGrid (view currentGrid s)
+    drawScore
     present r
     where
+        drawBackground :: IO ()
         drawBackground = do
             rendererDrawColor r $= blackBackground
             clear r
         
+        drawOutline :: IO ()
         drawOutline = do
             rendererDrawColor r $= whiteOutline
             drawRect r $ Just $ mkRect leftMargin topMargin (fromIntegral (boardWidth * squareSide)) (fromIntegral (boardHeight * squareSide))
