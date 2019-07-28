@@ -51,6 +51,7 @@ data Update =
     Tick Word32 |
     MoveLeft |
     MoveRight |
+    Drop |
     Rotate deriving Show
 
 brickWidth :: Brick -> Int
@@ -68,6 +69,14 @@ update (Tick newTick) = tick newTick
 update MoveLeft = move (-1)
 update MoveRight = move 1
 update Rotate = rotate
+update Drop = dropDown
+
+dropDown :: State -> State
+dropDown st = let
+    futureStates = iterate dropOne st
+    afterDropped = dropWhile (\st -> view (active . y)  st > 0) futureStates
+    in head afterDropped
+
 
 rotate :: State -> State
 rotate = over (active . brick . shape .unBrickShape) (map reverse . transpose)
@@ -101,14 +110,18 @@ fit min max value
     | value < max = value
     | otherwise = max 
 
-tick :: Word32 -> State -> State
-tick newTick state = let
+dropOne :: State -> State
+dropOne state = let
     b = view (active . brick) state
     bumpY = over (active . y) (\y -> fit 0 (boardHeight - brickHeight b) (y + 1))
     spaceBelow = canGoDownMore state
     updateFn = if spaceBelow then bumpY else newShape
+      in updateFn state
+
+tick :: Word32 -> State -> State
+tick newTick state = let
     setTick = set lastTick newTick
-      in (updateFn . setTick) state
+      in (dropOne . setTick) state
 
 newShape :: State -> State
 newShape st = let
@@ -213,6 +226,15 @@ leftL = BrickShape [
     [True, True]
     ]
 
+tri :: BrickShape
+tri = BrickShape [
+     [False, True, False],
+     [True, True, True]
+    ] 
+
+line :: BrickShape
+line = BrickShape [[True, True, True, True]]
+
 rightL :: BrickShape
 rightL = mirror leftL    
 
@@ -229,7 +251,7 @@ emptyGrid :: [[Maybe a]]
 emptyGrid = replicate (fromIntegral boardHeight) (replicate (fromIntegral boardWidth) Nothing) 
 
 shapeSeq :: [BrickShape]
-shapeSeq = cycle [square, leftSquiggle, rightSquiggle, leftL, rightL]
+shapeSeq = cycle [square, leftSquiggle, rightSquiggle, leftL, rightL, tri, line]
 
 colourSeq :: [Colour]
 colourSeq = cycle [Red, Green, Blue, Pink, Purple, Orange, White]

@@ -48,8 +48,9 @@ action (KeyboardEvent keyboardEvent)
   where
     extractEvent KeycodeLeft  = Just MoveLeft
     extractEvent KeycodeRight = Just MoveRight
-    extractEvent KeycodeUp     = Just Rotate
-    extractEvent _ = Nothing
+    extractEvent KeycodeUp    = Just Rotate
+    extractEvent KeycodeDown  = Just Drop
+    extractEvent _            = Nothing
 
 action _ = Nothing    
       
