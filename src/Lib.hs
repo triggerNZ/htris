@@ -4,6 +4,7 @@ module Lib where
 
 import Control.Monad.IO.Class 
 import Data.List (reverse, transpose)
+import Data.Maybe (isJust)
 import Data.Vector (Vector)
 import Data.Word (Word8)
 import SDL (Renderer, ($=))
@@ -16,7 +17,7 @@ import GHC.Word (Word32)
 
 import Control.Lens hiding (element)
 import Control.Lens.TH
-
+import Debug.Trace (traceShowId, trace)
 
 data Colour = Red | Green | Blue | Yellow | Pink | Purple | Orange | White deriving Show
 
@@ -71,11 +72,28 @@ update Rotate = rotate
 rotate :: State -> State
 rotate = over (active . brick . shape .unBrickShape) (map reverse . transpose)
 
+canMove :: State -> Int -> Bool
+canMove st m = let
+    ypos    = view (active . y) st
+    xpos    = view (active . x) st
+    activeB = (view (active . brick) st)
+    bh      = brickHeight activeB
+    bw      = brickWidth activeB
+    grd     = view currentGrid st
+    subgrid = map (map isJust) $ subrect grd (xpos + m) ypos bw bh 
+    shp     = view (active . brick . shape . unBrickShape) st
+    furthestRight = boardWidth - bw
+    in 
+        if (m, xpos) == (-1, 0) then 
+            False
+        else if (m, xpos) == (1, furthestRight) then
+            False
+        else 
+            not (anyOverlap subgrid shp)
+
+
 move :: Int -> State -> State
-move m s = let
-    b = view (active . brick) s
-    maxWidth = boardWidth - brickWidth b
-    in over (active . x) (\n -> fit 0 (fromIntegral maxWidth) (n + m)) s
+move m s = if canMove s m then over (active . x) (+ m) s else s
 
 fit :: Ord a => a -> a -> a ->a
 fit min max value
@@ -133,10 +151,29 @@ mergeBrickIntoGrid original ab = let
 
 canGoDownMore :: State -> Bool
 canGoDownMore st = let
-    ypos = view (active . y) st
-    bh = brickHeight (view (active . brick) st)
-    in ypos + bh < boardHeight
+    ypos    = view (active . y) st
+    xpos    = view (active . x) st
+    activeB = (view (active . brick) st)
+    bh      = brickHeight activeB
+    bw      = brickWidth activeB
+    grd     = view currentGrid st
+    subgrid = map (map isJust) $ subrect grd xpos (ypos + 1) bw bh 
+    shp     = view (active . brick . shape . unBrickShape) st
+    in ypos + bh < boardHeight && not (anyOverlap subgrid shp)
 
+sub :: [a] -> Int -> Int -> [a]
+sub xs start len = take len (drop start xs)
+
+subrect :: [[a]] -> Int -> Int -> Int -> Int -> [[a]]
+subrect rect x y w h = sub (map (\r -> sub r x w) rect) y h 
+
+anyOverlap :: [[Bool]] -> [[Bool]] -> Bool
+anyOverlap a b = any id $ map (any id) anded
+        where
+            zip' :: [[a]] -> [[b]] -> [[(a, b)]]
+            zip' = zipWith zip
+            anded :: [[Bool]]
+            anded = map (map (uncurry (&&))) (zip' a b)
 
 boardHeight :: Int
 boardHeight = 20
@@ -218,7 +255,11 @@ renderColour Red = V4 0xFF 0 0 0
 renderColour Blue = V4 0 0 0xFF 0
 renderColour Green = V4 0 0xFF 0 0
 renderColour White = V4 0xFF 0xFF 0xFF 0
-renderColour _ = undefined
+renderColour Orange = V4 0xFF 0xA5 0 0
+renderColour Pink = V4 0xFF 0xC0 0xCB 0
+renderColour Purple = V4 0x99 0x32 0xCC 0
+renderColour o = error $ "Don't know how to render " ++ show o
+
 
 renderState :: State -> Renderer -> IO ()
 renderState s r = do
