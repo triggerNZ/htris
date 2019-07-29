@@ -307,7 +307,6 @@ renderState s r = do
     drawOutline
     drawActive (view active s)
     drawGrid (view currentGrid s)
-    drawScore
     present r
     where
         drawBackground :: IO ()
