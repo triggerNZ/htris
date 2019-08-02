@@ -26,6 +26,7 @@ library:
   source-dirs: src
   dependencies:
     - sdl2
+    - sdl2-ttf
     - vector
     - lens
 
@@ -41,4 +42,5 @@ executables:
     - htris
     - vector
     - sdl2
+    - sdl2-ttf
     - lens
