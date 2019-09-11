@@ -17,6 +17,7 @@ main = do
     renderer <-  SDL.createRenderer window (-1)  SDL.defaultRenderer
     initialTick <- SDLTime.ticks
     appLoop (initialState initialTick) renderer
+    shutdown
   
 initLibs :: IO ()
 initLibs = do
